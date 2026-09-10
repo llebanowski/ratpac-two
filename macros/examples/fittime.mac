@@ -1,4 +1,4 @@
-# Example macro showing how to use quadfitter
+# Example macro showing how to use fittime
 
 /glg4debug/glg4param omit_muon_processes 1.0
 /glg4debug/glg4param omit_hadronic_processes 1.0

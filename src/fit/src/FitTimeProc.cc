@@ -16,7 +16,7 @@ namespace RAT {
 
 void FitTimeProc::BeginOfRun(DS::Run *run) {
   DBLinkPtr table = DB::Get()->GetLink("FIT_COMMON", "");
-  fLightSpeed = table->GetD("light_speed");
+  if (!WasParamSet("light_speed")) fLightSpeed = table->GetD("light_speed");
   if (fLightSpeed <= 0 || fLightSpeed > 299.792458)
     throw ParamInvalid("light_speed", "light_speed in FIT_COMMON table must be > 0 and <= 299.792458 mm/ns.");
 
@@ -49,11 +49,17 @@ void FitTimeProc::SetD(std::string param, double value) {
   } else if (param == "light_speed") {
     if (value <= 0 || value > 299.792458)
       throw ParamInvalid(param, "light_speed must be positive and <= 299.792458 mm/ns.");
-    fLightSpeed = value;
+    if (!WasParamSet("wavelength"))
+      fLightSpeed = value;
+    else
+      throw ParamInvalid(param, "light_speed cannot be set at same time as wavelength.");
   } else if (param == "wavelength") {
     if (value <= 0) throw ParamInvalid(param, "wavelength must be positive.");
-    fWavelength = value;
-    fSetWavelength = true;
+    if (!WasParamSet("light_speed")) {
+      fWavelength = value;
+      fSetWavelength = true;
+    } else
+      throw ParamInvalid(param, "wavelength cannot be set at same time as light_speed.");
   } else if (param == "event_position_x") {
     fPosition.SetX(value);
   } else if (param == "event_position_y") {

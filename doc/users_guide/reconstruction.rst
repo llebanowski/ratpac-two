@@ -37,7 +37,7 @@ with different settings in a single macro.
 =========================   ==========================  ===================
 **Field**                   **Type**                    **Description**
 =========================   ==========================  ===================
-``label``                   ``string``                  Additional string appended to "fitcentroid"
+``label``                   ``string``                  Additional string appended to "fittime"
 
 ``pmt_type``                ``int``                     PMT "type" to use.  Multiple types can be used.  Defaults to all types.
 
@@ -52,7 +52,7 @@ with different settings in a single macro.
 ``event_position_z``        ``double``                  Position of event in mm.  Defaults to 0.
 =========================   ==========================  ===================
 
-Position fit information in data structure
+Time fit information in data structure
 ''''''''''''''''''''''''''''''''''''''''''
 * name - "fittime"
 * figure of merit - ``num_times``      is the number of PMT hits used in the reconstruction
