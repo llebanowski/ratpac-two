@@ -203,6 +203,7 @@ bool OutNtupleProc::OpenFile(std::string filename) {
   outputTree->Branch("triggerTime", &triggerTime);  // Local trigger time
   outputTree->Branch("timestamp", &timestamp);      // Global trigger time
   outputTree->Branch("trigger_word", &trigger_word);
+  outputTree->Branch("triggerPeak", &triggerPeak);
   outputTree->Branch("event_cleaning_word", &event_cleaning_word);
   outputTree->Branch("timeSinceLastTrigger_us", &timeSinceLastTrigger_us);
   // MC Information
@@ -319,6 +320,11 @@ bool OutNtupleProc::OpenFile(std::string filename) {
     outputTree->Branch("mcPEy", &mcpey);
     outputTree->Branch("mcPEz", &mcpez);
     outputTree->Branch("mcPECharge", &mcpecharge);
+    outputTree->Branch("mcPECreationTime", &mcpecreationtime);
+    outputTree->Branch("mcPECreationX", &mcpecreationx);
+    outputTree->Branch("mcPECreationY", &mcpecreationy);
+    outputTree->Branch("mcPECreationZ", &mcpecreationz);
+    outputTree->Branch("mcPEExcitationTime", &mcpeexcitationtime);
   }
   if (options.tracking) {
     // Save particle tracking information
@@ -331,6 +337,8 @@ bool OutNtupleProc::OpenFile(std::string filename) {
     outputTree->Branch("trackMomZ", &trackMomZ);
     outputTree->Branch("trackKE", &trackKE);
     outputTree->Branch("trackTime", &trackTime);
+    outputTree->Branch("trackDep", &trackDep);
+    outputTree->Branch("trackQDep", &trackQDep);
     outputTree->Branch("trackProcess", &trackProcess);
     metaTree->Branch("processCodeMap", &processCodeMap);
     outputTree->Branch("trackVolume", &trackVolume);
@@ -442,12 +450,14 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
     trackMomZ.clear();
     trackKE.clear();
     trackTime.clear();
+    trackDep.clear();
+    trackQDep.clear();
     trackProcess.clear();
     trackVolume.clear();
 
     std::vector<double> xtrack, ytrack, ztrack;
     std::vector<double> pxtrack, pytrack, pztrack;
-    std::vector<double> kinetic, globaltime;
+    std::vector<double> kinetic, globaltime, deposited, quenchedDeposited;
     std::vector<int> processMapID;
     std::vector<int> volumeMapID;
     for (int trk = 0; trk < nTracks; trk++) {
@@ -461,6 +471,8 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
       pztrack.clear();
       kinetic.clear();
       globaltime.clear();
+      deposited.clear();
+      quenchedDeposited.clear();
       processMapID.clear();
       volumeMapID.clear();
       int nSteps = track->GetMCTrackStepCount();
@@ -486,6 +498,8 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
         TVector3 momentum = step->GetMomentum();
         kinetic.push_back(step->GetKE());
         globaltime.push_back(step->GetGlobalTime());
+        deposited.push_back(step->GetDepositedEnergy());
+        quenchedDeposited.push_back(step->GetQuenchedDepositedEnergy());
         xtrack.push_back(tv.X());
         ytrack.push_back(tv.Y());
         ztrack.push_back(tv.Z());
@@ -495,6 +509,8 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
       }
       trackKE.push_back(kinetic);
       trackTime.push_back(globaltime);
+      trackDep.push_back(deposited);
+      trackQDep.push_back(quenchedDeposited);
       trackPosX.push_back(xtrack);
       trackPosY.push_back(ytrack);
       trackPosZ.push_back(ztrack);
@@ -529,6 +545,11 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
   mcpey.clear();
   mcpez.clear();
   mcpecharge.clear();
+  mcpecreationtime.clear();
+  mcpecreationx.clear();
+  mcpecreationy.clear();
+  mcpecreationz.clear();
+  mcpeexcitationtime.clear();
 
   mcnhits = mc->GetMCPMTCount();
   mcpecount = mc->GetNumPE();
@@ -549,6 +570,12 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
         mcpey.push_back(position.Y());
         mcpez.push_back(position.Z());
         mcpecharge.push_back(mcph->GetCharge());
+        mcpecreationtime.push_back(mcph->GetCreationTime());
+        TVector3 creationPos = mcph->GetCreationPosition();
+        mcpecreationx.push_back(creationPos.X());
+        mcpecreationy.push_back(creationPos.Y());
+        mcpecreationz.push_back(creationPos.Z());
+        mcpeexcitationtime.push_back(mcph->GetExcitationTime());
         if (mcph->IsDarkHit()) {
           mcpeprocess.push_back(noise);
           continue;
@@ -591,6 +618,7 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
     triggerTime = ev->GetCalibratedTriggerTime();
     timestamp = TTimeStamp_to_UnixTime(ev->GetUTC()) - TTimeStamp_to_UnixTime(runBranch->GetStartTime()) + triggerTime;
     trigger_word = ev->GetTriggerWord();
+    triggerPeak = ev->GetTriggerPeak();
     event_cleaning_word = ev->GetEventCleaningWord();
     timeSinceLastTrigger_us = ev->GetDeltaT() / 1000.;
 
@@ -767,6 +795,7 @@ Processor::Result OutNtupleProc::DSEvent(DS::Root *ds) {
     nhits = -1;
     totalcharge = 0;
     triggerTime = 0;
+    triggerPeak = 0;
     timeSinceLastTrigger_us = 0;
     if (options.pmthits) {
       hitPMTID.clear();
@@ -876,36 +905,32 @@ void OutNtupleProc::EndOfRun(DS::Run *run) {
 void OutNtupleProc::SetS(std::string param, std::string value) {
   if (param == "file") {
     this->defaultFilename = value;
+  } else {
+    throw Processor::ParamUnknown(param);
   }
 }
 
 void OutNtupleProc::SetI(std::string param, int value) {
   if (param == "include_tracking") {
     options.tracking = value ? true : false;
-  }
-  if (param == "include_mcparticles") {
+  } else if (param == "include_mcparticles") {
     options.mcparticles = value ? true : false;
-  }
-  if (param == "include_pmthits") {
+  } else if (param == "include_pmthits") {
     options.pmthits = value ? true : false;
-  }
-  if (param == "include_nestedtubehits") {
+  } else if (param == "include_nestedtubehits") {
     options.nthits = value ? true : false;
-  }
-  if (param == "include_untriggered_events") {
+  } else if (param == "include_untriggered_events") {
     options.untriggered = value ? true : false;
-  }
-  if (param == "include_mchits") {
+  } else if (param == "include_mchits") {
     options.mchits = value ? true : false;
-  }
-  if (param == "include_digitizerwaveforms") {
+  } else if (param == "include_digitizerwaveforms") {
     options.digitizerwaveforms = value ? true : false;
-  }
-  if (param == "include_digitizerhits") {
+  } else if (param == "include_digitizerhits") {
     options.digitizerhits = value ? true : false;
-  }
-  if (param == "include_digitizerfits") {
+  } else if (param == "include_digitizerfits") {
     options.digitizerfits = value ? true : false;
+  } else {
+    throw Processor::ParamUnknown(param);
   }
 }
 

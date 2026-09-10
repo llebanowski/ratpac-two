@@ -18,16 +18,16 @@ void SplitEVDAQProc::BeginOfRun(DS::Run *run) {
 
   ldaq = DB::Get()->GetLink("DAQ", "SplitEVDAQ");
   fEventCounter = 0;
-  fPulseWidth = ldaq->GetD("pulse_width");
-  fTriggerThreshold = ldaq->GetD("trigger_threshold");
-  fTriggerWindow = ldaq->GetD("trigger_window");
-  fPmtLockout = ldaq->GetD("pmt_lockout");
-  fTriggerLockout = ldaq->GetD("trigger_lockout");
-  fTriggerResolution = ldaq->GetD("trigger_resolution");
-  fLookback = ldaq->GetD("lookback");
-  fMaxHitTime = ldaq->GetD("max_hit_time");
-  fMaxHitDuration = ldaq->GetD("max_hit_duration");
-  fTriggerOnNoise = ldaq->GetI("trigger_on_noise");
+  if (!WasParamSet("pulse_width")) fPulseWidth = ldaq->GetD("pulse_width");
+  if (!WasParamSet("trigger_threshold")) fTriggerThreshold = ldaq->GetD("trigger_threshold");
+  if (!WasParamSet("trigger_window")) fTriggerWindow = ldaq->GetD("trigger_window");
+  if (!WasParamSet("pmt_lockout")) fPmtLockout = ldaq->GetD("pmt_lockout");
+  if (!WasParamSet("trigger_lockout")) fTriggerLockout = ldaq->GetD("trigger_lockout");
+  if (!WasParamSet("trigger_resolution")) fTriggerResolution = ldaq->GetD("trigger_resolution");
+  if (!WasParamSet("lookback")) fLookback = ldaq->GetD("lookback");
+  if (!WasParamSet("max_hit_time")) fMaxHitTime = ldaq->GetD("max_hit_time");
+  if (!WasParamSet("max_hit_duration")) fMaxHitDuration = ldaq->GetD("max_hit_duration");
+  if (!WasParamSet("trigger_on_noise")) fTriggerOnNoise = ldaq->GetI("trigger_on_noise");
   fDigitizerType = ldaq->GetS("digitizer_name");
   fDigitize = ldaq->GetZ("digitize");
 
@@ -139,6 +139,16 @@ Processor::Result SplitEVDAQProc::DSEvent(DS::Root *ds) {
     ev->SetUTC(mc->GetUTC());
     ev->SetDeltaT(tt - lastTrigger);
     lastTrigger = tt;
+
+    // Find the peak of the trigger sum (in units of hits) over the same time window used for hits
+    double windowLo = tt - fLookback;
+    double windowHi = tt + fTriggerWindow;
+    int binLo = std::max(0, static_cast<int>(std::ceil((windowLo - start) / bw)));
+    int binHi = std::min(nbins - 1, static_cast<int>(std::floor((windowHi - start) / bw)));
+    double triggerPeak = 0.0;
+    for (int i = binLo; i <= binHi; i++) triggerPeak = std::max(triggerPeak, triggerHistogram[i]);
+    ev->SetTriggerPeak(triggerPeak);
+
     double totalEVCharge = 0;
     for (int imcpmt = 0; imcpmt < mc->GetMCPMTCount(); imcpmt++) {
       DS::MCPMT *mcpmt = mc->GetMCPMT(imcpmt);
@@ -151,7 +161,7 @@ Processor::Result SplitEVDAQProc::DSEvent(DS::Root *ds) {
         for (int pidx = 0; pidx < mcpmt->GetMCPhotonCount(); pidx++) {
           DS::MCPhoton *photon = mcpmt->GetMCPhoton(pidx);
           double time = photon->GetFrontEndTime();
-          if ((time > (tt - fLookback)) && (time < (tt + fTriggerWindow))) {
+          if ((time > windowLo) && (time < windowHi)) {
             pmtInEvent = true;
             hitTimes.push_back(time);
             integratedCharge += photon->GetCharge();

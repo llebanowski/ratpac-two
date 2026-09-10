@@ -149,6 +149,7 @@ class OutNtupleProc : public Processor {
   double triggerTime;
   ULong64_t timestamp;
   ULong64_t trigger_word;
+  double triggerPeak;
   ULong64_t event_cleaning_word;
   double timeSinceLastTrigger_us;
   // MC Summary Information
@@ -181,6 +182,11 @@ class OutNtupleProc : public Processor {
   std::vector<double> mcpey;
   std::vector<double> mcpez;
   std::vector<double> mcpecharge;
+  std::vector<double> mcpecreationtime;
+  std::vector<double> mcpecreationx;
+  std::vector<double> mcpecreationy;
+  std::vector<double> mcpecreationz;
+  std::vector<double> mcpeexcitationtime;
   // MCParticles
   int mcpcount;
   int mcid;
@@ -239,6 +245,8 @@ class OutNtupleProc : public Processor {
   std::vector<std::vector<double>> trackMomZ;
   std::vector<std::vector<double>> trackKE;
   std::vector<std::vector<double>> trackTime;
+  std::vector<std::vector<double>> trackDep;
+  std::vector<std::vector<double>> trackQDep;
   std::vector<std::vector<int>> trackProcess;
   std::vector<std::vector<int>> trackVolume;
 };
